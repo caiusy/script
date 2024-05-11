@@ -1,0 +1,149 @@
+manifest.json
+{
+  "manifest_version": 2,
+  "name": "Cache Cleaner on Schedule",
+  "description": "Clean cache for specified websites on schedule or on demand.",
+  "version": "1.0",
+  "permissions": [
+    "browsingData",
+    "storage",
+    "activeTab",
+    "alarms"
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": false
+  },
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "options_page": "options.html"
+}
+background.js
+chrome.runtime.onInstalled.addListener(() => {
+    // 默认情况下，不设置自动清理
+    chrome.storage.sync.set({ autoClean: false, cleanTime: "05:00" });
+});
+
+// 清理函数
+function clearCache() {
+    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+        // 注意，这里只是示例，实际清理代码根据实际API使用可能有所不同
+        chrome.browsingData.remove({
+            "origins": [new URL(tabs[0].url).origin]
+        }, {
+            "cache": true
+        }, () => {
+            console.log('Cache cleared for the current active tab.');
+        });
+    });
+}
+
+// 监听来自popup的消息
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+    if(request.clearCache) {
+        clearCache();
+    }
+});
+popup.html
+
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            min-width: 250px;
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        #websiteInput {
+            width: calc(100% - 22px);
+            margin-bottom: 10px;
+        }
+        #clearCache, #setAutoClean {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        #status {
+            margin-top: 10px;
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <h1>Cache Cleaner</h1>
+    <input type="text" id="websiteInput" placeholder="https://example.com">
+    <button id="clearCache">Clear Cache Now</button>
+    
+    <label for="autoCleanTime">Auto Clean Time:</label>
+    <select id="autoCleanTime">
+        <option value="05:00">5:00 AM</option>
+        <option value="06:00">6:00 AM</option>
+        <!-- Add additional options as needed -->
+    </select>
+    <button id="setAutoClean">Set Auto Clean Time</button>
+
+    <div id="status"></div>
+    
+    <script src="popup.js"></script>
+</body>
+</html>
+
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    var clearCacheButton = document.getElementById('clearCache');
+    var setAutoCleanButton = document.getElementById('setAutoClean');
+    var websiteInput = document.getElementById('websiteInput');
+    var autoCleanTime = document.getElementById('autoCleanTime');
+    var statusText = document.getElementById('status');
+
+    clearCacheButton.addEventListener('click', function() {
+        var siteUrl = websiteInput.value.trim();
+        // Input validation can be added here if needed
+        if(siteUrl) {
+            clearSiteCache(siteUrl);
+            websiteInput.value = ''; // Clear input after use
+            statusText.textContent = 'Cache cleared for ' + siteUrl;
+        } else {
+            statusText.textContent = 'Please enter a valid URL!';
+            statusText.style.color = 'red';
+        }
+    });
+
+    setAutoCleanButton.addEventListener('click', function() {
+        var cleanTime = autoCleanTime.value;
+        chrome.storage.sync.set({ autoCleanTime: cleanTime }, function() {
+            statusText.textContent = 'Auto clean time set to: ' + cleanTime;
+        });
+        // Below you would also set up the logic to trigger the auto-clean.
+    });
+
+    // The clearSiteCache function should communicate with background.js to perform the cache cleari
+
+background.js
+
+// 在 background.js 中扩充
+
+// 每分钟检查一次
+setInterval(function() {
+    var currentDateTime = new Date();
+    var currentTimeString = currentDateTime.getHours().toString().padStart(2, '0') + ":" + currentDateTime.getMinutes().toString().padStart(2, '0');
+    chrome.storage.sync.get(['autoClean', 'cleanTime'], function(data) {
+        // 如果到了设定时间，并且自动清理为true，执行清理动作
+        if(data.autoClean && currentTimeString === data.cleanTime) {
+            clearCache();
+        }
+    });
+}, 60000);
